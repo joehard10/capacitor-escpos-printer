@@ -1,6 +1,8 @@
 package cg.sijit.escpos;
+
 import android.Manifest;
 import android.util.Log;
+
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
@@ -8,14 +10,15 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
 
 /**
- * Plugin Capacitor pour imprimer sur imprimantes ESC/POS via Bluetooth.
+ * Plugin Capacitor pour imprimer sur imprimantes ESC/POS via Bluetooth et Wifi.
  */
 @CapacitorPlugin(
         name = "ESCPOSPrinter",
-        permissions= {
-                @com.getcapacitor.annotation.Permission(
+        permissions = {
+                @Permission(
                         alias = "bluetooth",
                         strings = {
                                 Manifest.permission.BLUETOOTH,
@@ -29,25 +32,26 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 public class ESCPOSPrinterPlugin extends Plugin {
 
     private static final String TAG = "ESCPOSPrinterPlugin";
-    private ESCPOSPrinter implementation = new ESCPOSPrinter(getContext());
+    private ESCPOSPrinter implementation;
 
+    @Override
+    public void load() {
+        // Important : getContext() n’est pas dispo dans le constructeur, il faut le faire ici
+        implementation = new ESCPOSPrinter(getContext());
+    }
 
-    /**
-     * Lister les appareils Bluetooth appairés
-     */
     @PluginMethod
     public void listPairedDevices(PluginCall call) {
+        if (!checkBluetoothPermission(call)) return;
         JSArray devices = implementation.listPairedDevices();
         JSObject ret = new JSObject();
         ret.put("devices", devices);
         call.resolve(ret);
     }
 
-    /**
-     * Se connecter à une imprimante par son nom
-     */
     @PluginMethod
     public void connect(PluginCall call) {
+        if (!checkBluetoothPermission(call)) return;
         String deviceName = call.getString("deviceName");
         if (deviceName == null) {
             call.reject("deviceName is required");
@@ -62,29 +66,21 @@ public class ESCPOSPrinterPlugin extends Plugin {
         }
     }
 
-    /**
-     * Déconnexion propre
-     */
     @PluginMethod
     public void disconnect(PluginCall call) {
         implementation.disconnect();
         call.resolve(new JSObject().put("disconnected", true));
     }
 
-    /**
-     * Vérifier si connecté
-     */
     @PluginMethod
     public void isConnected(PluginCall call) {
         boolean connected = implementation.isConnected();
         call.resolve(new JSObject().put("connected", connected));
     }
 
-    /**
-     * Impression texte
-     */
     @PluginMethod
     public void printText(PluginCall call) {
+        if (!checkBluetoothPermission(call)) return;
         String text = call.getString("text");
         if (text == null) {
             call.reject("text is required");
@@ -99,33 +95,9 @@ public class ESCPOSPrinterPlugin extends Plugin {
         }
     }
 
-    /**
-     * Vérifier permissions
-     */
-    @PluginMethod
-    public void checkPermissions(PluginCall call) {
-        JSObject ret = new JSObject();
-        ret.put("bluetooth", getPermissionState("bluetooth").toString());
-        call.resolve(ret);
-    }
-
-    /**
-     * Demander permissions
-     */
-    @PluginMethod
-    public void requestPermissions(PluginCall call) {
-        requestPermissionForAlias("bluetooth", call, "permissionsCallback");
-    }
-
-    @PluginMethod
-    public void permissionsCallback(PluginCall call) {
-        JSObject ret = new JSObject();
-        ret.put("bluetooth", getPermissionState("bluetooth").toString());
-        call.resolve(ret);
-    }
-
     @PluginMethod
     public void setBold(PluginCall call) {
+        if (!checkBluetoothPermission(call)) return;
         Boolean bold = call.getBoolean("bold", false);
         try {
             implementation.setBold(bold);
@@ -137,6 +109,7 @@ public class ESCPOSPrinterPlugin extends Plugin {
 
     @PluginMethod
     public void setAlignment(PluginCall call) {
+        if (!checkBluetoothPermission(call)) return;
         String align = call.getString("align", "left");
         try {
             implementation.setAlignment(align);
@@ -148,6 +121,7 @@ public class ESCPOSPrinterPlugin extends Plugin {
 
     @PluginMethod
     public void setTextSize(PluginCall call) {
+        if (!checkBluetoothPermission(call)) return;
         int size = call.getInt("size", 1);
         try {
             implementation.setTextSize(size);
@@ -159,6 +133,7 @@ public class ESCPOSPrinterPlugin extends Plugin {
 
     @PluginMethod
     public void cutPaper(PluginCall call) {
+        if (!checkBluetoothPermission(call)) return;
         try {
             implementation.cutPaper();
             call.resolve(new JSObject().put("success", true));
@@ -167,11 +142,14 @@ public class ESCPOSPrinterPlugin extends Plugin {
         }
     }
 
-
     @PluginMethod
     public void connectWifi(PluginCall call) {
         String ip = call.getString("ip");
-        int port = call.getInt("port", 9100); // default port
+        int port = call.getInt("port", 9100);
+        if (ip == null) {
+            call.reject("ip is required");
+            return;
+        }
         try {
             boolean connected = implementation.connectWifi(ip, port);
             call.resolve(new JSObject().put("connected", connected));
@@ -192,7 +170,34 @@ public class ESCPOSPrinterPlugin extends Plugin {
         call.resolve(new JSObject().put("connected", connected));
     }
 
+    @PluginMethod
+    public void checkPermissions(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("bluetooth", getPermissionState("bluetooth").toString());
+        call.resolve(ret);
+    }
 
+    @PluginMethod
+    public void requestPermissions(PluginCall call) {
+        requestPermissionForAlias("bluetooth", call, "permissionsCallback");
+    }
 
+    @PluginMethod
+    public void permissionsCallback(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("bluetooth", getPermissionState("bluetooth").toString());
+        call.resolve(ret);
+    }
 
+    /**
+     * Vérifier si la permission Bluetooth est accordée. Si non, reject et return false.
+     */
+    private boolean checkBluetoothPermission(PluginCall call) {
+        PermissionState state = getPermissionState("bluetooth");
+        if (state != PermissionState.GRANTED) {
+            call.reject("Bluetooth permission not granted");
+            return false;
+        }
+        return true;
+    }
 }
