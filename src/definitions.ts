@@ -22,4 +22,11 @@ export interface ESCPOSPrinterPlugin {
   // Permissions Bluetooth
   checkPermissions(): Promise<{ bluetooth: string }>;
   requestPermissions(): Promise<{ bluetooth: string }>;
+
+  // USB
+  listUsbDevices(): Promise<{ devices: { name: string; vendorId: number; productId: number }[] }>;
+  connectUsb(options: { vendorId: number; productId: number }): Promise<{ connected: boolean }>;
+  disconnectUsb(): Promise<{ disconnected: boolean }>;
+  isUsbConnected(): Promise<{ connected: boolean }>;
+
 }
