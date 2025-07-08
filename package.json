@@ -1,6 +1,6 @@
 {
   "name": "capacitor-escpos-printer",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Capacitor plugin for printing receipts to Bluetooth, Wifi and USB printers.Enables Ionic/Capacitor apps to send ESC/POS commands or plain text to thermal or dot-matrix printers, allowing seamless printing of tickets, invoices and reports directly from Android and iOS.",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",

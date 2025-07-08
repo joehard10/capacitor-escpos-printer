@@ -27,6 +27,10 @@ npx cap sync
 * [`isWifiConnected()`](#iswificonnected)
 * [`checkPermissions()`](#checkpermissions)
 * [`requestPermissions()`](#requestpermissions)
+* [`listUsbDevices()`](#listusbdevices)
+* [`connectUsb(...)`](#connectusb)
+* [`disconnectUsb()`](#disconnectusb)
+* [`isUsbConnected()`](#isusbconnected)
 
 </docgen-index>
 
@@ -207,6 +211,54 @@ requestPermissions() => Promise<{ bluetooth: string; }>
 ```
 
 **Returns:** <code>Promise&lt;{ bluetooth: string; }&gt;</code>
+
+--------------------
+
+
+### listUsbDevices()
+
+```typescript
+listUsbDevices() => Promise<{ devices: { name: string; vendorId: number; productId: number; }[]; }>
+```
+
+**Returns:** <code>Promise&lt;{ devices: { name: string; vendorId: number; productId: number; }[]; }&gt;</code>
+
+--------------------
+
+
+### connectUsb(...)
+
+```typescript
+connectUsb(options: { vendorId: number; productId: number; }) => Promise<{ connected: boolean; }>
+```
+
+| Param         | Type                                                  |
+| ------------- | ----------------------------------------------------- |
+| **`options`** | <code>{ vendorId: number; productId: number; }</code> |
+
+**Returns:** <code>Promise&lt;{ connected: boolean; }&gt;</code>
+
+--------------------
+
+
+### disconnectUsb()
+
+```typescript
+disconnectUsb() => Promise<{ disconnected: boolean; }>
+```
+
+**Returns:** <code>Promise&lt;{ disconnected: boolean; }&gt;</code>
+
+--------------------
+
+
+### isUsbConnected()
+
+```typescript
+isUsbConnected() => Promise<{ connected: boolean; }>
+```
+
+**Returns:** <code>Promise&lt;{ connected: boolean; }&gt;</code>
 
 --------------------
 

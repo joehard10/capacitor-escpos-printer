@@ -4,11 +4,17 @@ import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.hardware.usb.*;
+
 import android.os.Build;
 import android.util.Log;
 
+import androidx.annotation.RequiresPermission;
 import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.JSArray;
@@ -17,6 +23,7 @@ import com.getcapacitor.JSObject;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.Set;
 import java.util.UUID;
 
@@ -37,8 +44,23 @@ public class ESCPOSPrinter {
     private OutputStream wifiOutputStream = null;
     private boolean isWifiConnected = false;
 
+
+
+    private UsbManager usbManager;
+    private UsbDeviceConnection usbConnection = null;
+    private UsbEndpoint usbEndpoint = null;
+    private boolean isUsbConnected = false;
+
+    private static final String ACTION_USB_PERMISSION = "cg.sijit.escpos.USB_PERMISSION";
+
+
+
+
     public ESCPOSPrinter(Context context) {
         this.context = context;
+        this.usbManager = (UsbManager) context.getSystemService(Context.USB_SERVICE);
+        IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
+        ContextCompat.registerReceiver(this.context, this.usbPermissionReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     private boolean hasBluetoothConnectPermission() {
@@ -82,6 +104,7 @@ public class ESCPOSPrinter {
     /**
      * Se connecter à une imprimante Bluetooth par nom
      */
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     public boolean connect(String deviceName) throws Exception {
         if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
             throw new Exception("Bluetooth non disponible ou désactivé");
@@ -166,7 +189,13 @@ public class ESCPOSPrinter {
             wifiOutputStream.write(text.getBytes(StandardCharsets.UTF_8));
             wifiOutputStream.flush();
             Log.i(TAG, "Texte imprimé via Wifi");
-        } else {
+        } else if (isUsbConnected && usbConnection != null && usbEndpoint != null) {
+            byte[] data = text.getBytes(StandardCharsets.UTF_8);
+            int result = usbConnection.bulkTransfer(usbEndpoint, data, data.length, 1000);
+            if (result < 0) throw new Exception("USB bulk transfer failed");
+            Log.i(TAG, "Texte imprimé via USB");
+        }
+        else {
             throw new Exception("Aucune imprimante connectée (Bluetooth ou Wifi)");
         }
     }
@@ -256,4 +285,135 @@ public class ESCPOSPrinter {
     public boolean isWifiConnected() {
         return isWifiConnected;
     }
+
+
+
+
+
+//    USB
+    public JSArray listUsbDevices() {
+        JSArray devicesArray = new JSArray();
+
+        if (usbManager == null) {
+            Log.e(TAG, "usbManager is null");
+            return devicesArray;
+        }
+
+        HashMap<String, UsbDevice> deviceList = usbManager.getDeviceList();
+        for (UsbDevice device : deviceList.values()) {
+            JSObject dev = new JSObject();
+            dev.put("name", device.getDeviceName());
+            dev.put("vendorId", device.getVendorId());
+            dev.put("productId", device.getProductId());
+            devicesArray.put(dev);
+        }
+        return devicesArray;
+    }
+
+
+    public boolean connectUsb(int vendorId, int productId) throws Exception {
+//        if (!usbManager.hasPermission(targetDevice)) {
+//            requestUsbPermission(targetDevice);
+//            throw new Exception("Demande de permission USB envoyée, réessaie ensuite.");
+//        }
+        if (usbManager == null) throw new Exception("USB Manager non disponible.");
+
+        HashMap<String, UsbDevice> deviceList = usbManager.getDeviceList();
+        UsbDevice targetDevice = null;
+
+        for (UsbDevice device : deviceList.values()) {
+            if (device.getVendorId() == vendorId && device.getProductId() == productId) {
+                targetDevice = device;
+                break;
+            }
+        }
+
+        if (targetDevice == null) throw new Exception("USB device not found");
+
+        if (!usbManager.hasPermission(targetDevice)) {
+            throw new Exception("No permission to access USB device");
+        }
+
+        UsbDeviceConnection connection = usbManager.openDevice(targetDevice);
+        if (connection == null) throw new Exception("Failed to open USB device");
+
+        // Trouver l’endpoint de sortie (bulk OUT)
+        UsbInterface usbInterface = targetDevice.getInterface(0);
+        connection.claimInterface(usbInterface, true);
+
+        UsbEndpoint endpointOut = null;
+        for (int i = 0; i < usbInterface.getEndpointCount(); i++) {
+            UsbEndpoint ep = usbInterface.getEndpoint(i);
+            if (ep.getType() == UsbConstants.USB_ENDPOINT_XFER_BULK &&
+                    ep.getDirection() == UsbConstants.USB_DIR_OUT) {
+                endpointOut = ep;
+                break;
+            }
+        }
+
+        if (endpointOut == null) {
+            connection.close();
+            throw new Exception("No bulk OUT endpoint found");
+        }
+
+        this.usbConnection = connection;
+        this.usbEndpoint = endpointOut;
+        this.isUsbConnected = true;
+
+        Log.i(TAG, "Connecté USB: vendorId=" + vendorId + " productId=" + productId);
+
+        return true;
+    }
+
+    public void disconnectUsb() {
+        try {
+            if (usbConnection != null) {
+                usbConnection.close();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error during USB disconnect", e);
+        }
+        usbConnection = null;
+        usbEndpoint = null;
+        isUsbConnected = false;
+        Log.i (TAG, "USB Déconnecté.");
+    }
+
+
+    public boolean isUsbConnected() {
+        return isUsbConnected && usbConnection != null;
+    }
+
+    private final BroadcastReceiver usbPermissionReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (ACTION_USB_PERMISSION.equals(action)) {
+                synchronized (this) {
+                    UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+                    if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
+                        if (device != null) {
+                            Log.i(TAG, "Permission USB accordée pour l’appareil " + device.getDeviceName());
+                            // Ici tu peux continuer ton connectUsb(device)
+                        }
+                    } else {
+                        Log.w(TAG, "Permission USB refusée pour l’appareil " + device.getDeviceName());
+                    }
+                }
+            }
+        }
+    };
+
+    public void unregisterUsbPermissionReceiver() {
+        try {
+            context.unregisterReceiver(usbPermissionReceiver);
+        } catch (IllegalArgumentException e) {
+            Log.w(TAG, "usbPermissionReceiver déjà désenregistré ou non enregistré");
+        }
+    }
+
+
+
+
+
 }

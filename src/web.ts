@@ -2,6 +2,7 @@ import { WebPlugin } from '@capacitor/core';
 import type { ESCPOSPrinterPlugin } from './definitions';
 
 export class ESCPOSPrinterWeb extends WebPlugin implements ESCPOSPrinterPlugin {
+  // Bluetooth
   async listPairedDevices(): Promise<{ devices: { name: string; address: string }[] }> {
     console.warn('Web: listPairedDevices not available');
     return { devices: [] };
@@ -22,6 +23,7 @@ export class ESCPOSPrinterWeb extends WebPlugin implements ESCPOSPrinterPlugin {
     return { connected: false };
   }
 
+  // Impression texte
   async printText(): Promise<{ success: boolean }> {
     console.warn('Web: printText not available');
     return { success: false };
@@ -47,6 +49,7 @@ export class ESCPOSPrinterWeb extends WebPlugin implements ESCPOSPrinterPlugin {
     return { success: false };
   }
 
+  // Wifi
   async connectWifi(): Promise<{ connected: boolean }> {
     console.warn('Web: connectWifi not available');
     return { connected: false };
@@ -62,6 +65,7 @@ export class ESCPOSPrinterWeb extends WebPlugin implements ESCPOSPrinterPlugin {
     return { connected: false };
   }
 
+  // Permissions Bluetooth
   async checkPermissions(): Promise<{ bluetooth: string }> {
     console.warn('Web: checkPermissions not available');
     return { bluetooth: 'denied' };
@@ -70,5 +74,26 @@ export class ESCPOSPrinterWeb extends WebPlugin implements ESCPOSPrinterPlugin {
   async requestPermissions(): Promise<{ bluetooth: string }> {
     console.warn('Web: requestPermissions not available');
     return { bluetooth: 'denied' };
+  }
+
+  // USB
+  async listUsbDevices(): Promise<{ devices: { name: string; vendorId: number; productId: number }[] }> {
+    console.warn('Web: listUsbDevices not available');
+    return { devices: [] };
+  }
+
+  async connectUsb(): Promise<{ connected: boolean }> {
+    console.warn('Web: connectUsb not available');
+    return { connected: false };
+  }
+
+  async disconnectUsb(): Promise<{ disconnected: boolean }> {
+    console.warn('Web: disconnectUsb not available');
+    return { disconnected: true };
+  }
+
+  async isUsbConnected(): Promise<{ connected: boolean }> {
+    console.warn('Web: isUsbConnected not available');
+    return { connected: false };
   }
 }
